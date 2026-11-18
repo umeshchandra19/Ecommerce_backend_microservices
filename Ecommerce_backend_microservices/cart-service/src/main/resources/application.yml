@@ -1,0 +1,32 @@
+server:
+  port: ${PORT:8083}
+spring:
+  application:
+    name: cart-service
+  datasource:
+    url: ${DB_URL:jdbc:postgresql://localhost:5432/cartdb}
+    username: ${DB_USER:shop}
+    password: ${DB_PASSWORD:shop}
+  jpa:
+    open-in-view: false
+    hibernate:
+      ddl-auto: update   # demo convenience; use Flyway/Liquibase migrations in production
+  data:
+    redis:
+      host: ${REDIS_HOST:localhost}
+      port: ${REDIS_PORT:6379}
+      timeout: 500ms
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info
+app:
+  jwt:
+    secret: ${JWT_SECRET:dev-only-secret-change-me-please-32-bytes-min}
+    expiry-seconds: ${JWT_EXPIRY_SECONDS:3600}
+  internal:
+    key: ${INTERNAL_KEY:dev-internal-key-change-me}
+  ratelimit:
+    enabled: true
+    requests-per-minute: ${RATE_LIMIT_RPM:120}

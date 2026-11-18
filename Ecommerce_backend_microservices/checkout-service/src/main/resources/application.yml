@@ -1,0 +1,57 @@
+server:
+  port: ${PORT:8085}
+spring:
+  application:
+    name: checkout-service
+  data:
+    redis:
+      host: ${REDIS_HOST:localhost}
+      port: ${REDIS_PORT:6379}
+      timeout: 500ms
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info
+app:
+  jwt:
+    secret: ${JWT_SECRET:dev-only-secret-change-me-please-32-bytes-min}
+    expiry-seconds: ${JWT_EXPIRY_SECONDS:3600}
+  internal:
+    key: ${INTERNAL_KEY:dev-internal-key-change-me}
+  ratelimit:
+    enabled: true
+    requests-per-minute: ${RATE_LIMIT_RPM:120}
+  services:
+    cart-url: ${CART_URL:http://localhost:8083}
+    catalog-url: ${CATALOG_URL:http://localhost:8082}
+    order-url: ${ORDER_URL:http://localhost:8084}
+  http:
+    connect-timeout-ms: 1000
+    read-timeout-ms: 3000
+resilience4j:
+  circuitbreaker:
+    configs:
+      default:
+        slidingWindowSize: 20
+        minimumNumberOfCalls: 10
+        failureRateThreshold: 50
+        waitDurationInOpenState: 10s
+        permittedNumberOfCallsInHalfOpenState: 3
+        ignoreExceptions:
+          - com.shopmesh.common.web.ApiException
+    instances:
+      cart:
+        baseConfig: default
+      catalog:
+        baseConfig: default
+      order:
+        baseConfig: default
+  retry:
+    instances:
+      read:
+        maxAttempts: 3
+        waitDuration: 100ms
+        retryExceptions:
+          - org.springframework.web.client.ResourceAccessException
+          - org.springframework.web.client.HttpServerErrorException

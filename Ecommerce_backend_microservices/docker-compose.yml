@@ -1,0 +1,85 @@
+x-common-env: &common-env
+  JWT_SECRET: ${JWT_SECRET:-local-dev-secret-change-me-32-bytes-minimum!!}
+  INTERNAL_KEY: ${INTERNAL_KEY:-local-internal-key-change-me}
+  REDIS_HOST: redis
+  DB_USER: shop
+  DB_PASSWORD: shop
+  # Default 120 requests/min per user/IP. For load tests run with RATE_LIMIT_RPM=100000000
+  RATE_LIMIT_RPM: ${RATE_LIMIT_RPM:-120}
+
+x-wait-for-infra: &wait-for-infra
+  postgres:
+    condition: service_healthy
+  redis:
+    condition: service_healthy
+
+services:
+  postgres:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: shop
+      POSTGRES_PASSWORD: shop
+      POSTGRES_DB: shop
+    volumes:
+      - ./docker/init-db.sql:/docker-entrypoint-initdb.d/init.sql:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U shop"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+  redis:
+    image: redis:7-alpine
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+  auth-service:
+    build: { context: ., args: { MODULE: auth-service } }
+    ports: ["8081:8081"]
+    environment:
+      <<: *common-env
+      DB_URL: jdbc:postgresql://postgres:5432/authdb
+    depends_on: *wait-for-infra
+
+  catalog-service:
+    build: { context: ., args: { MODULE: catalog-service } }
+    ports: ["8082:8082"]
+    environment:
+      <<: *common-env
+      DB_URL: jdbc:postgresql://postgres:5432/catalogdb
+      CACHE_TYPE: ${CACHE_TYPE:-redis}        # set to "none" to measure without the cache
+      SEED_PRODUCTS: ${SEED_PRODUCTS:-200}
+    depends_on: *wait-for-infra
+
+  cart-service:
+    build: { context: ., args: { MODULE: cart-service } }
+    ports: ["8083:8083"]
+    environment:
+      <<: *common-env
+      DB_URL: jdbc:postgresql://postgres:5432/cartdb
+    depends_on: *wait-for-infra
+
+  order-service:
+    build: { context: ., args: { MODULE: order-service } }
+    ports: ["8084:8084"]
+    environment:
+      <<: *common-env
+      DB_URL: jdbc:postgresql://postgres:5432/orderdb
+    depends_on: *wait-for-infra
+
+  checkout-service:
+    build: { context: ., args: { MODULE: checkout-service } }
+    ports: ["8085:8085"]
+    environment:
+      <<: *common-env
+      CART_URL: http://cart-service:8083
+      CATALOG_URL: http://catalog-service:8082
+      ORDER_URL: http://order-service:8084
+    depends_on:
+      - cart-service
+      - catalog-service
+      - order-service
+      - redis
